@@ -1,79 +1,90 @@
 import React, { useState, useEffect } from "react";
-import { getProducts, addProduct, updateProduct, deleteProduct } from "./api";
-import CategoryFilter from "./CategoryFilter";
 import ProductList from "./ProductList";
 import ProductForm from "./ProductForm";
+import CategoryFilter from "./CategoryFilter";
+import Pagination from "./Pagination";
+import { fetchProducts, createProduct, updateProduct, deleteProduct } from "./api";
 import "./App.css";
 
 function App() {
   const [products, setProducts] = useState([]);
-  const [filterCategory, setFilterCategory] = useState("");
+  const [filteredCategory, setFilteredCategory] = useState("All");
   const [editingProduct, setEditingProduct] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const productsPerPage = 5;
 
   useEffect(() => {
-    setLoading(true);
-    getProducts().then(data => {
-      setProducts(data);
-      setLoading(false);
-    });
+    loadProducts();
   }, []);
 
-  const filteredProducts = filterCategory
-    ? products.filter(p => p.category === filterCategory)
-    : products;
+  const loadProducts = async () => {
+    const data = await fetchProducts();
+    setProducts(data);
+  };
 
   const handleAdd = async (product) => {
-    setLoading(true);
-    const newProd = await addProduct(product);
-    setProducts(prev => [...prev, newProd]);
-    setLoading(false);
+    await createProduct(product);
+    loadProducts();
+    setCurrentPage(1); // Reset to first page when adding
+  };
+
+  const handleEdit = (product) => {
+    setEditingProduct(product);
   };
 
   const handleUpdate = async (product) => {
-    setLoading(true);
-    const updated = await updateProduct(product);
-    setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+    await updateProduct(product);
     setEditingProduct(null);
-    setLoading(false);
+    loadProducts();
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this product?")) {
-      setLoading(true);
-      await deleteProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
-      if (editingProduct && editingProduct.id === id) setEditingProduct(null);
-      setLoading(false);
-    }
+    await deleteProduct(id);
+    loadProducts();
   };
 
+  // Filter products by category
+  const filteredProducts =
+    filteredCategory === "All"
+      ? products
+      : products.filter((p) => p.category === filteredCategory);
+
+  // Pagination calculations
+  const indexOfLastProduct = currentPage * productsPerPage;
+  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
+  const currentProducts = filteredProducts.slice(
+    indexOfFirstProduct,
+    indexOfLastProduct
+  );
+
+  // Reset to first page when filtering category
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredCategory]);
+
   return (
-    <div className="app-container">
+    <div className="App">
       <h1>Product Inventory Manager</h1>
-
       <CategoryFilter
-        className="filter-select"
-        value={filterCategory}
-        onChange={setFilterCategory}
+        selectedCategory={filteredCategory}
+        onSelectCategory={setFilteredCategory}
+        products={products}
       />
-
-      {loading && <p className="loading-text">Loading...</p>}
-
       <ProductList
-        products={filteredProducts}
-        onEdit={setEditingProduct}
+        products={currentProducts}
+        onEdit={handleEdit}
         onDelete={handleDelete}
       />
-
-      <hr />
-
-      <h2>{editingProduct ? "Edit Product" : "Add Product"}</h2>
-
+      <Pagination
+        productsPerPage={productsPerPage}
+        totalProducts={filteredProducts.length}
+        currentPage={currentPage}
+        paginate={setCurrentPage}
+      />
       <ProductForm
-        key={editingProduct ? editingProduct.id : "new"}
-        initialData={editingProduct}
-        onSubmit={editingProduct ? handleUpdate : handleAdd}
+        onAdd={handleAdd}
+        onUpdate={handleUpdate}
+        editingProduct={editingProduct}
         onCancel={() => setEditingProduct(null)}
       />
     </div>
